@@ -1,0 +1,510 @@
+   1               		.file	"main.c"
+   2               	__SP_L__ = 0x3d
+   3               	__SREG__ = 0x3f
+   4               	__tmp_reg__ = 0
+   5               	__zero_reg__ = 1
+   8               		.text
+   9               	.Ltext0:
+ 106               	ws2812.constprop.0:
+ 107               		.stabd	46,0,0
+   1:main.c        **** #include <avr/io.h>
+   2:main.c        **** #include <avr/interrupt.h>
+   3:main.c        **** #include <util/delay.h>
+   4:main.c        **** 
+   5:main.c        **** #define WS2812_OUT         PORTB
+   6:main.c        **** #define WS2812_DIR         DDRB
+   7:main.c        **** 
+   8:main.c        **** #define LED_BYTES        12
+   9:main.c        **** 
+  10:main.c        **** #define W_ZERO_PULSE    350
+  11:main.c        **** #define W_ONE_PULSE     900
+  12:main.c        **** #define W_TOTAL_PERIOD 1250
+  13:main.c        **** #define W_FIXED_LOW       2
+  14:main.c        **** #define W_FIXED_HIGH      4
+  15:main.c        **** #define W_FIXED_TOTAL     8
+  16:main.c        **** 
+  17:main.c        **** #define W_ZERO_CYCLE \
+  18:main.c        **** 	(((F_CPU / 1000) * W_ZERO_PULSE) / 1000000)
+  19:main.c        **** 
+  20:main.c        **** #define W_ONE_CYCLE \
+  21:main.c        **** 	(((F_CPU / 1000) * W_ONE_PULSE + 500000) / 1000000)
+  22:main.c        **** 
+  23:main.c        **** #define W_TOTAL_CYCLE \
+  24:main.c        **** 	(((F_CPU / 1000) * W_TOTAL_PERIOD + 500000) / 1000000)
+  25:main.c        **** 
+  26:main.c        **** #define W1 \
+  27:main.c        **** 	(W_ZERO_CYCLE - W_FIXED_LOW)
+  28:main.c        **** 
+  29:main.c        **** #define W2 \
+  30:main.c        **** 	(W_ONE_CYCLE - W_FIXED_HIGH - W1)
+  31:main.c        **** 
+  32:main.c        **** #define W3 \
+  33:main.c        **** 	(W_TOTAL_CYCLE - W_FIXED_TOTAL - W1 - W2)
+  34:main.c        **** 
+  35:main.c        **** #if (W1 > 0)
+  36:main.c        **** #define W1_NOPS W1
+  37:main.c        **** #else
+  38:main.c        **** #define W1_NOPS  0
+  39:main.c        **** #endif
+  40:main.c        **** 
+  41:main.c        **** #define W_LOW_TIME \
+  42:main.c        **** 	(((W1_NOPS + W_FIXED_LOW) * 1000000) / (F_CPU / 1000))
+  43:main.c        **** 
+  44:main.c        **** #if (W_LOW_TIME > 550)
+  45:main.c        **** #error "F_CPU to low"
+  46:main.c        **** #elif (W_LOW_TIME > 450)
+  47:main.c        **** #warning "Critical timing"
+  48:main.c        **** #endif
+  49:main.c        **** 
+  50:main.c        **** #if (W2 > 0)
+  51:main.c        **** #define W2_NOPS W2
+  52:main.c        **** #else
+  53:main.c        **** #define W2_NOPS  0
+  54:main.c        **** #endif
+  55:main.c        **** 
+  56:main.c        **** #if (W3 > 0)
+  57:main.c        **** #define W3_NOPS W3
+  58:main.c        **** #else
+  59:main.c        **** #define W3_NOPS  0
+  60:main.c        **** #endif
+  61:main.c        **** 
+  62:main.c        **** #define W_NOP1  "nop      \n\t"
+  63:main.c        **** #define W_NOP2  "rjmp .+0 \n\t"
+  64:main.c        **** #define W_NOP4  W_NOP2 W_NOP2
+  65:main.c        **** #define W_NOP8  W_NOP4 W_NOP4
+  66:main.c        **** #define W_NOP16 W_NOP8 W_NOP8
+  67:main.c        **** 
+  68:main.c        **** static uint8_t _pixels[LED_BYTES];
+  69:main.c        **** 
+  70:main.c        **** static void ws2812(uint8_t *pixels, uint16_t count, uint8_t pin)
+ 109               	.LM0:
+ 110               	.LFBB1:
+ 111               	/* prologue: function */
+ 112               	/* frame size = 0 */
+ 113               	/* stack size = 0 */
+ 114               	.L__stack_usage = 0
+  71:main.c        **** {
+  72:main.c        **** 	uint8_t b, c, h, l, s;
+  73:main.c        **** 	h = (1 << pin);
+  74:main.c        **** 	WS2812_DIR |= h;
+ 116               	.LM1:
+ 117 0000 B99A      		sbi 0x17,1
+  75:main.c        **** 	l = ~h & WS2812_OUT;
+ 119               	.LM2:
+ 120 0002 38B3      		in r19,0x18
+ 122               	.LM3:
+ 123 0004 3D7F      		andi r19,lo8(-3)
+  76:main.c        **** 	h |= WS2812_OUT;
+ 125               	.LM4:
+ 126 0006 28B3      		in r18,0x18
+ 128               	.LM5:
+ 129 0008 2260      		ori r18,lo8(2)
+  77:main.c        **** 	s = SREG;
+ 131               	.LM6:
+ 132 000a 4FB7      		in r20,__SREG__
+  78:main.c        **** 	asm volatile("cli");
+ 134               	.LM7:
+ 135               	/* #APP */
+ 136               	 ;  78 "main.c" 1
+ 137 000c F894      		cli
+ 138               	 ;  0 "" 2
+ 139               	/* #NOAPP */
+ 140 000e 80E0      		ldi r24,lo8(_pixels)
+ 141 0010 90E0      		ldi r25,hi8(_pixels)
+ 142               	.L2:
+ 143 0012 FC01      		movw r30,r24
+  79:main.c        **** 	while(count--)
+  80:main.c        **** 	{
+  81:main.c        **** 		b = *pixels++;
+ 145               	.LM8:
+ 146 0014 0196      		adiw r24,1
+  82:main.c        **** 		asm volatile
+ 148               	.LM9:
+ 149 0016 5081      		ld r21,Z
+ 150               	/* #APP */
+ 151               	 ;  82 "main.c" 1
+ 152 0018 68E0      		       ldi   r22,8  
+ 153               		loop20:            
+ 154 001a 28BB      		       out   24,r18 
+ 155 001c 00C0      		rjmp .+0 
+ 156 001e 00C0      		rjmp .+0 
+ 157 0020 57FF      		       sbrs  r21,7  
+ 158 0022 38BB      		       out   24,r19 
+ 159 0024 550F      		       lsl   r21    
+ 160 0026 0000      		nop      
+ 161 0028 00C0      		rjmp .+0 
+ 162 002a 00C0      		rjmp .+0 
+ 163 002c 00C0      		rjmp .+0 
+ 164 002e 00C0      		rjmp .+0 
+ 165 0030 38BB      		       out   24,r19 
+ 166 0032 00C0      		rjmp .+0 
+ 167 0034 6A95      		       dec   r22    
+ 168 0036 01F4      		       brne  loop20
+ 169               		
+ 170               	 ;  0 "" 2
+  79:main.c        **** 	while(count--)
+ 172               	.LM10:
+ 173               	/* #NOAPP */
+ 174 0038 50E0      		ldi r21,hi8(_pixels+12)
+ 175 003a 8030      		cpi r24,lo8(_pixels+12)
+ 176 003c 9507      		cpc r25,r21
+ 177 003e 01F4      		brne .L2
+  83:main.c        **** 		(
+  84:main.c        **** 			"       ldi   %0,8  \n\t"
+  85:main.c        **** 			"loop%=:            \n\t"
+  86:main.c        **** 			"       out   %2,%3 \n\t"
+  87:main.c        **** #if (W1_NOPS & 1)
+  88:main.c        **** W_NOP1
+  89:main.c        **** #endif
+  90:main.c        **** #if (W1_NOPS & 2)
+  91:main.c        **** W_NOP2
+  92:main.c        **** #endif
+  93:main.c        **** #if (W1_NOPS & 4)
+  94:main.c        **** W_NOP4
+  95:main.c        **** #endif
+  96:main.c        **** #if (W1_NOPS & 8)
+  97:main.c        **** W_NOP8
+  98:main.c        **** #endif
+  99:main.c        **** #if (W1_NOPS & 16)
+ 100:main.c        **** W_NOP16
+ 101:main.c        **** #endif
+ 102:main.c        **** 			"       sbrs  %1,7  \n\t"
+ 103:main.c        **** 			"       out   %2,%4 \n\t"
+ 104:main.c        **** 			"       lsl   %1    \n\t"
+ 105:main.c        **** #if (W2_NOPS & 1)
+ 106:main.c        **** W_NOP1
+ 107:main.c        **** #endif
+ 108:main.c        **** #if (W2_NOPS & 2)
+ 109:main.c        **** W_NOP2
+ 110:main.c        **** #endif
+ 111:main.c        **** #if (W2_NOPS & 4)
+ 112:main.c        **** W_NOP4
+ 113:main.c        **** #endif
+ 114:main.c        **** #if (W2_NOPS & 8)
+ 115:main.c        **** W_NOP8
+ 116:main.c        **** #endif
+ 117:main.c        **** #if (W2_NOPS & 16)
+ 118:main.c        **** W_NOP16
+ 119:main.c        **** #endif
+ 120:main.c        **** 			"       out   %2,%4 \n\t"
+ 121:main.c        **** #if (W3_NOPS & 1)
+ 122:main.c        **** W_NOP1
+ 123:main.c        **** #endif
+ 124:main.c        **** #if (W3_NOPS & 2)
+ 125:main.c        **** W_NOP2
+ 126:main.c        **** #endif
+ 127:main.c        **** #if (W3_NOPS & 4)
+ 128:main.c        **** W_NOP4
+ 129:main.c        **** #endif
+ 130:main.c        **** #if (W3_NOPS & 8)
+ 131:main.c        **** W_NOP8
+ 132:main.c        **** #endif
+ 133:main.c        **** #if (W3_NOPS & 16)
+ 134:main.c        **** W_NOP16
+ 135:main.c        **** #endif
+ 136:main.c        **** 			"       dec   %0    \n\t"
+ 137:main.c        **** 			"       brne  loop%=\n\t"
+ 138:main.c        **** 			:	"=&d" (c)
+ 139:main.c        **** 			:	"r" (b),
+ 140:main.c        **** 				"I" (_SFR_IO_ADDR(WS2812_OUT)),
+ 141:main.c        **** 				"r" (h),
+ 142:main.c        **** 				"r" (l)
+ 143:main.c        **** 		);
+ 144:main.c        **** 	}
+ 145:main.c        **** 
+ 146:main.c        **** 	SREG = s;
+ 179               	.LM11:
+ 180 0040 4FBF      		out __SREG__,r20
+ 181               	/* epilogue start */
+ 147:main.c        **** }
+ 183               	.LM12:
+ 184 0042 0895      		ret
+ 191               	.Lscope1:
+ 193               		.stabd	78,0,0
+ 194               		.section	.text.startup,"ax",@progbits
+ 196               	.global	main
+ 198               	main:
+ 199               		.stabd	46,0,0
+ 148:main.c        **** 
+ 149:main.c        **** int main(void)
+ 150:main.c        **** {
+ 201               	.LM13:
+ 202               	.LFBB2:
+ 203               	/* prologue: function */
+ 204               	/* frame size = 0 */
+ 205               	/* stack size = 0 */
+ 206               	.L__stack_usage = 0
+ 151:main.c        **** 	uint8_t i;
+ 152:main.c        **** 	PORTB = (1 << 0);
+ 208               	.LM14:
+ 209 0000 81E0      		ldi r24,lo8(1)
+ 210 0002 88BB      		out 0x18,r24
+ 153:main.c        **** 
+ 154:main.c        **** 	ws2812(_pixels, LED_BYTES, 1);
+ 212               	.LM15:
+ 213 0004 00D0      		rcall ws2812.constprop.0
+ 155:main.c        **** 	for(;;)
+ 156:main.c        **** 	{
+ 157:main.c        **** 		if(PINB & (1 << 0))
+ 158:main.c        **** 		{
+ 159:main.c        **** 			for(i = 0; i < LED_BYTES; )
+ 160:main.c        **** 			{
+ 161:main.c        **** 				_pixels[i++] = 0;
+ 162:main.c        **** 				_pixels[i++] = 0;
+ 163:main.c        **** 				_pixels[i++] = 0;
+ 164:main.c        **** 			}
+ 165:main.c        **** 		}
+ 166:main.c        **** 		else
+ 167:main.c        **** 		{
+ 168:main.c        **** 			for(i = 0; i < LED_BYTES; )
+ 169:main.c        **** 			{
+ 170:main.c        **** 				_pixels[i++] = 255;
+ 215               	.LM16:
+ 216 0006 CFEF      		ldi r28,lo8(-1)
+ 217               	.LBB12:
+ 218               	.LBB13:
+ 219               	.LBB14:
+ 220               	.LBB15:
+ 222               	.Ltext1:
+   1:/usr/avr/include/util/delay_basic.h **** /* Copyright (c) 2002, Marek Michalkiewicz
+   2:/usr/avr/include/util/delay_basic.h ****    Copyright (c) 2007 Joerg Wunsch
+   3:/usr/avr/include/util/delay_basic.h ****    All rights reserved.
+   4:/usr/avr/include/util/delay_basic.h **** 
+   5:/usr/avr/include/util/delay_basic.h ****    Redistribution and use in source and binary forms, with or without
+   6:/usr/avr/include/util/delay_basic.h ****    modification, are permitted provided that the following conditions are met:
+   7:/usr/avr/include/util/delay_basic.h **** 
+   8:/usr/avr/include/util/delay_basic.h ****    * Redistributions of source code must retain the above copyright
+   9:/usr/avr/include/util/delay_basic.h ****      notice, this list of conditions and the following disclaimer.
+  10:/usr/avr/include/util/delay_basic.h **** 
+  11:/usr/avr/include/util/delay_basic.h ****    * Redistributions in binary form must reproduce the above copyright
+  12:/usr/avr/include/util/delay_basic.h ****      notice, this list of conditions and the following disclaimer in
+  13:/usr/avr/include/util/delay_basic.h ****      the documentation and/or other materials provided with the
+  14:/usr/avr/include/util/delay_basic.h ****      distribution.
+  15:/usr/avr/include/util/delay_basic.h **** 
+  16:/usr/avr/include/util/delay_basic.h ****    * Neither the name of the copyright holders nor the names of
+  17:/usr/avr/include/util/delay_basic.h ****      contributors may be used to endorse or promote products derived
+  18:/usr/avr/include/util/delay_basic.h ****      from this software without specific prior written permission.
+  19:/usr/avr/include/util/delay_basic.h **** 
+  20:/usr/avr/include/util/delay_basic.h ****   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  21:/usr/avr/include/util/delay_basic.h ****   AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  22:/usr/avr/include/util/delay_basic.h ****   IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  23:/usr/avr/include/util/delay_basic.h ****   ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+  24:/usr/avr/include/util/delay_basic.h ****   LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  25:/usr/avr/include/util/delay_basic.h ****   CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  26:/usr/avr/include/util/delay_basic.h ****   SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  27:/usr/avr/include/util/delay_basic.h ****   INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  28:/usr/avr/include/util/delay_basic.h ****   CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  29:/usr/avr/include/util/delay_basic.h ****   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  30:/usr/avr/include/util/delay_basic.h ****   POSSIBILITY OF SUCH DAMAGE. */
+  31:/usr/avr/include/util/delay_basic.h **** 
+  32:/usr/avr/include/util/delay_basic.h **** /* $Id: delay_basic.h 2453 2014-10-19 08:18:11Z saaadhu $ */
+  33:/usr/avr/include/util/delay_basic.h **** 
+  34:/usr/avr/include/util/delay_basic.h **** #ifndef _UTIL_DELAY_BASIC_H_
+  35:/usr/avr/include/util/delay_basic.h **** #define _UTIL_DELAY_BASIC_H_ 1
+  36:/usr/avr/include/util/delay_basic.h **** 
+  37:/usr/avr/include/util/delay_basic.h **** #include <inttypes.h>
+  38:/usr/avr/include/util/delay_basic.h **** 
+  39:/usr/avr/include/util/delay_basic.h **** #if !defined(__DOXYGEN__)
+  40:/usr/avr/include/util/delay_basic.h **** static __inline__ void _delay_loop_1(uint8_t __count) __attribute__((__always_inline__));
+  41:/usr/avr/include/util/delay_basic.h **** static __inline__ void _delay_loop_2(uint16_t __count) __attribute__((__always_inline__));
+  42:/usr/avr/include/util/delay_basic.h **** #endif
+  43:/usr/avr/include/util/delay_basic.h **** 
+  44:/usr/avr/include/util/delay_basic.h **** /** \file */
+  45:/usr/avr/include/util/delay_basic.h **** /** \defgroup util_delay_basic <util/delay_basic.h>: Basic busy-wait delay loops
+  46:/usr/avr/include/util/delay_basic.h ****     \code
+  47:/usr/avr/include/util/delay_basic.h ****     #include <util/delay_basic.h>
+  48:/usr/avr/include/util/delay_basic.h ****     \endcode
+  49:/usr/avr/include/util/delay_basic.h **** 
+  50:/usr/avr/include/util/delay_basic.h ****     The functions in this header file implement simple delay loops
+  51:/usr/avr/include/util/delay_basic.h ****     that perform a busy-waiting.  They are typically used to
+  52:/usr/avr/include/util/delay_basic.h ****     facilitate short delays in the program execution.  They are
+  53:/usr/avr/include/util/delay_basic.h ****     implemented as count-down loops with a well-known CPU cycle
+  54:/usr/avr/include/util/delay_basic.h ****     count per loop iteration.  As such, no other processing can
+  55:/usr/avr/include/util/delay_basic.h ****     occur simultaneously.  It should be kept in mind that the
+  56:/usr/avr/include/util/delay_basic.h ****     functions described here do not disable interrupts.
+  57:/usr/avr/include/util/delay_basic.h **** 
+  58:/usr/avr/include/util/delay_basic.h ****     In general, for long delays, the use of hardware timers is
+  59:/usr/avr/include/util/delay_basic.h ****     much preferrable, as they free the CPU, and allow for
+  60:/usr/avr/include/util/delay_basic.h ****     concurrent processing of other events while the timer is
+  61:/usr/avr/include/util/delay_basic.h ****     running.  However, in particular for very short delays, the
+  62:/usr/avr/include/util/delay_basic.h ****     overhead of setting up a hardware timer is too much compared
+  63:/usr/avr/include/util/delay_basic.h ****     to the overall delay time.
+  64:/usr/avr/include/util/delay_basic.h **** 
+  65:/usr/avr/include/util/delay_basic.h ****     Two inline functions are provided for the actual delay algorithms.
+  66:/usr/avr/include/util/delay_basic.h **** 
+  67:/usr/avr/include/util/delay_basic.h **** */
+  68:/usr/avr/include/util/delay_basic.h **** 
+  69:/usr/avr/include/util/delay_basic.h **** /** \ingroup util_delay_basic
+  70:/usr/avr/include/util/delay_basic.h **** 
+  71:/usr/avr/include/util/delay_basic.h ****     Delay loop using an 8-bit counter \c __count, so up to 256
+  72:/usr/avr/include/util/delay_basic.h ****     iterations are possible.  (The value 256 would have to be passed
+  73:/usr/avr/include/util/delay_basic.h ****     as 0.)  The loop executes three CPU cycles per iteration, not
+  74:/usr/avr/include/util/delay_basic.h ****     including the overhead the compiler needs to setup the counter
+  75:/usr/avr/include/util/delay_basic.h ****     register.
+  76:/usr/avr/include/util/delay_basic.h **** 
+  77:/usr/avr/include/util/delay_basic.h ****     Thus, at a CPU speed of 1 MHz, delays of up to 768 microseconds
+  78:/usr/avr/include/util/delay_basic.h ****     can be achieved.
+  79:/usr/avr/include/util/delay_basic.h **** */
+  80:/usr/avr/include/util/delay_basic.h **** void
+  81:/usr/avr/include/util/delay_basic.h **** _delay_loop_1(uint8_t __count)
+  82:/usr/avr/include/util/delay_basic.h **** {
+  83:/usr/avr/include/util/delay_basic.h **** 	__asm__ volatile (
+  84:/usr/avr/include/util/delay_basic.h **** 		"1: dec %0" "\n\t"
+  85:/usr/avr/include/util/delay_basic.h **** 		"brne 1b"
+  86:/usr/avr/include/util/delay_basic.h **** 		: "=r" (__count)
+  87:/usr/avr/include/util/delay_basic.h **** 		: "0" (__count)
+  88:/usr/avr/include/util/delay_basic.h **** 	);
+  89:/usr/avr/include/util/delay_basic.h **** }
+  90:/usr/avr/include/util/delay_basic.h **** 
+  91:/usr/avr/include/util/delay_basic.h **** /** \ingroup util_delay_basic
+  92:/usr/avr/include/util/delay_basic.h **** 
+  93:/usr/avr/include/util/delay_basic.h ****     Delay loop using a 16-bit counter \c __count, so up to 65536
+  94:/usr/avr/include/util/delay_basic.h ****     iterations are possible.  (The value 65536 would have to be
+  95:/usr/avr/include/util/delay_basic.h ****     passed as 0.)  The loop executes four CPU cycles per iteration,
+  96:/usr/avr/include/util/delay_basic.h ****     not including the overhead the compiler requires to setup the
+  97:/usr/avr/include/util/delay_basic.h ****     counter register pair.
+  98:/usr/avr/include/util/delay_basic.h **** 
+  99:/usr/avr/include/util/delay_basic.h ****     Thus, at a CPU speed of 1 MHz, delays of up to about 262.1
+ 100:/usr/avr/include/util/delay_basic.h ****     milliseconds can be achieved.
+ 101:/usr/avr/include/util/delay_basic.h ****  */
+ 102:/usr/avr/include/util/delay_basic.h **** void
+ 103:/usr/avr/include/util/delay_basic.h **** _delay_loop_2(uint16_t __count)
+ 104:/usr/avr/include/util/delay_basic.h **** {
+ 105:/usr/avr/include/util/delay_basic.h **** 	__asm__ volatile (
+ 224               	.LM17:
+ 225 0008 00E0      		ldi r16,0
+ 226 000a 14EB      		ldi r17,lo8(-76)
+ 227               	.L7:
+ 228               	.LBE15:
+ 229               	.LBE14:
+ 230               	.LBE13:
+ 231               	.LBE12:
+ 233               	.Ltext2:
+ 157:main.c        **** 		{
+ 235               	.LM18:
+ 236 000c B099      		sbic 0x16,0
+ 237 000e 00C0      		rjmp .L5
+ 239               	.LM19:
+ 240 0010 C093 0000 		sts _pixels,r28
+ 171:main.c        **** 				_pixels[i++] = 255;
+ 242               	.LM20:
+ 243 0014 C093 0000 		sts _pixels+1,r28
+ 172:main.c        **** 				_pixels[i++] = 255;
+ 245               	.LM21:
+ 246 0018 C093 0000 		sts _pixels+2,r28
+ 170:main.c        **** 				_pixels[i++] = 255;
+ 248               	.LM22:
+ 249 001c C093 0000 		sts _pixels+3,r28
+ 171:main.c        **** 				_pixels[i++] = 255;
+ 251               	.LM23:
+ 252 0020 C093 0000 		sts _pixels+4,r28
+ 254               	.LM24:
+ 255 0024 C093 0000 		sts _pixels+5,r28
+ 170:main.c        **** 				_pixels[i++] = 255;
+ 257               	.LM25:
+ 258 0028 C093 0000 		sts _pixels+6,r28
+ 171:main.c        **** 				_pixels[i++] = 255;
+ 260               	.LM26:
+ 261 002c C093 0000 		sts _pixels+7,r28
+ 263               	.LM27:
+ 264 0030 C093 0000 		sts _pixels+8,r28
+ 170:main.c        **** 				_pixels[i++] = 255;
+ 266               	.LM28:
+ 267 0034 C093 0000 		sts _pixels+9,r28
+ 171:main.c        **** 				_pixels[i++] = 255;
+ 269               	.LM29:
+ 270 0038 C093 0000 		sts _pixels+10,r28
+ 272               	.LM30:
+ 273 003c C093 0000 		sts _pixels+11,r28
+ 274               	.L6:
+ 173:main.c        **** 			}
+ 174:main.c        **** 		}
+ 175:main.c        **** 
+ 176:main.c        **** 		ws2812(_pixels, LED_BYTES, 1);
+ 276               	.LM31:
+ 277 0040 00D0      		rcall ws2812.constprop.0
+ 278               	.LBB19:
+ 279               	.LBB18:
+ 280               	.LBB17:
+ 281               	.LBB16:
+ 283               	.Ltext3:
+ 285               	.LM32:
+ 286 0042 C801      		movw r24,r16
+ 287               	/* #APP */
+ 288               	 ;  105 "/usr/avr/include/util/delay_basic.h" 1
+ 289 0044 0197      		1: sbiw r24,1
+ 290 0046 01F4      		brne 1b
+ 291               	 ;  0 "" 2
+ 106:/usr/avr/include/util/delay_basic.h **** 		"1: sbiw %0,1" "\n\t"
+ 107:/usr/avr/include/util/delay_basic.h **** 		"brne 1b"
+ 108:/usr/avr/include/util/delay_basic.h **** 		: "=w" (__count)
+ 109:/usr/avr/include/util/delay_basic.h **** 		: "0" (__count)
+ 110:/usr/avr/include/util/delay_basic.h **** 	);
+ 111:/usr/avr/include/util/delay_basic.h **** }
+ 293               	.LM33:
+ 294               	/* #NOAPP */
+ 295 0048 00C0      		rjmp .L7
+ 296               	.L5:
+ 297               	.LBE16:
+ 298               	.LBE17:
+ 299               	.LBE18:
+ 300               	.LBE19:
+ 302               	.Ltext4:
+ 161:main.c        **** 				_pixels[i++] = 0;
+ 304               	.LM34:
+ 305 004a 1092 0000 		sts _pixels,__zero_reg__
+ 162:main.c        **** 				_pixels[i++] = 0;
+ 307               	.LM35:
+ 308 004e 1092 0000 		sts _pixels+1,__zero_reg__
+ 163:main.c        **** 			}
+ 310               	.LM36:
+ 311 0052 1092 0000 		sts _pixels+2,__zero_reg__
+ 161:main.c        **** 				_pixels[i++] = 0;
+ 313               	.LM37:
+ 314 0056 1092 0000 		sts _pixels+3,__zero_reg__
+ 162:main.c        **** 				_pixels[i++] = 0;
+ 316               	.LM38:
+ 317 005a 1092 0000 		sts _pixels+4,__zero_reg__
+ 163:main.c        **** 			}
+ 319               	.LM39:
+ 320 005e 1092 0000 		sts _pixels+5,__zero_reg__
+ 161:main.c        **** 				_pixels[i++] = 0;
+ 322               	.LM40:
+ 323 0062 1092 0000 		sts _pixels+6,__zero_reg__
+ 162:main.c        **** 				_pixels[i++] = 0;
+ 325               	.LM41:
+ 326 0066 1092 0000 		sts _pixels+7,__zero_reg__
+ 163:main.c        **** 			}
+ 328               	.LM42:
+ 329 006a 1092 0000 		sts _pixels+8,__zero_reg__
+ 161:main.c        **** 				_pixels[i++] = 0;
+ 331               	.LM43:
+ 332 006e 1092 0000 		sts _pixels+9,__zero_reg__
+ 162:main.c        **** 				_pixels[i++] = 0;
+ 334               	.LM44:
+ 335 0072 1092 0000 		sts _pixels+10,__zero_reg__
+ 163:main.c        **** 			}
+ 337               	.LM45:
+ 338 0076 1092 0000 		sts _pixels+11,__zero_reg__
+ 339 007a 00C0      		rjmp .L6
+ 341               	.Lscope2:
+ 343               		.stabd	78,0,0
+ 344               		.local	_pixels
+ 345               		.comm	_pixels,12,1
+ 347               		.text
+ 349               	.Letext0:
+ 350               		.ident	"GCC: (GNU) 9.3.0"
+ 351               	.global __do_clear_bss
+DEFINED SYMBOLS
+                            *ABS*:0000000000000000 main.c
+     /tmp/ccKSOen7.s:2      *ABS*:000000000000003d __SP_L__
+     /tmp/ccKSOen7.s:3      *ABS*:000000000000003f __SREG__
+     /tmp/ccKSOen7.s:4      *ABS*:0000000000000000 __tmp_reg__
+     /tmp/ccKSOen7.s:5      *ABS*:0000000000000001 __zero_reg__
+     /tmp/ccKSOen7.s:106    .text:0000000000000000 ws2812.constprop.0
+                             .bss:0000000000000000 _pixels
+     /tmp/ccKSOen7.s:153    .text:000000000000001a loop20
+     /tmp/ccKSOen7.s:198    .text.startup:0000000000000000 main
+
+UNDEFINED SYMBOLS
+__do_clear_bss

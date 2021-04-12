@@ -1,4 +1,4 @@
 # anime-glasses
 Glasses with LED Light
 
-Image coming soon
+Image & instructions coming soon
